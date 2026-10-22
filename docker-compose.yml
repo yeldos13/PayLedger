@@ -1,0 +1,18 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: payledger
+      POSTGRES_USER: payledger
+      POSTGRES_PASSWORD: payledger
+    ports:
+      - "127.0.0.1:5433:5432"  # 5432 is often taken by a local PostgreSQL
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U payledger -d payledger"]
+      interval: 2s
+      retries: 30
+
+volumes:
+  postgres-data:
