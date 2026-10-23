@@ -6,6 +6,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -28,6 +29,8 @@ public class Account {
     private Type type;
     /** Minor units (tiyn, cents), so no floating point. */
     private long balance;
+    @Version
+    private Long version;
     private Instant createdAt;
 
     protected Account() {
