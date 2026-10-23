@@ -11,17 +11,28 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.OptimisticLockingFailureException;
 
 @SpringBootTest
 @Import(TestcontainersConfig.class)
+@ExtendWith(OutputCaptureExtension.class)
 class TransferServiceTest {
 
     @Autowired TransferService service;
     @Autowired AccountRepository accounts;
+
+    @Test
+    void logsCompletedTransferAsJson(CapturedOutput output) {
+        var transferId = service.deposit(service.openAccount("KZT").getId(), 100).getId();
+
+        assertThat(output).containsPattern("\"message\":\"Transfer completed\".*\"transferId\":\"" + transferId);
+    }
 
     @Test
     void rejectsTransferWithoutEnoughMoney() {

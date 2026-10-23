@@ -1,5 +1,7 @@
 package dev.sozakbay.payledger.ledger;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -10,8 +12,11 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice
 class LedgerExceptionHandler {
 
+    private static final Logger log = LoggerFactory.getLogger(LedgerExceptionHandler.class);
+
     @ExceptionHandler
     ProblemDetail ruleViolated(LedgerException e) {
+        log.atInfo().addKeyValue("reason", e.getMessage()).log("Request rejected by ledger rule");
         return ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_CONTENT, e.getMessage());
     }
 

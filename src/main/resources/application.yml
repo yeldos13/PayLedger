@@ -21,3 +21,9 @@ management:
     web:
       exposure:
         include: health,info
+
+logging:
+  structured:
+    format:
+      # JSON logs (Elastic Common Schema), ready for Loki/ELK; key-value pairs become fields.
+      console: ecs
