@@ -1,8 +1,16 @@
 package dev.sozakbay.payledger.ledger;
 
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
 
+@Entity
+@Table(name = "accounts")
 public class Account {
 
     public enum Type {
@@ -12,12 +20,18 @@ public class Account {
         SYSTEM
     }
 
+    @Id
+    @GeneratedValue
     private UUID id;
     private String currency;
+    @Enumerated(EnumType.STRING)
     private Type type;
     /** Minor units (tiyn, cents), so no floating point. */
     private long balance;
     private Instant createdAt;
+
+    protected Account() {
+    }
 
     public Account(String currency) {
         this(currency, Type.CUSTOMER);

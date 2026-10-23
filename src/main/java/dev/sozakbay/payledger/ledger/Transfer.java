@@ -1,19 +1,37 @@
 package dev.sozakbay.payledger.ledger;
 
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.Id;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
 /** Money moved from one account to another, recorded as two balanced entries (double entry). */
+@Entity
+@Table(name = "transfers")
 public class Transfer {
 
+    @Id
+    @GeneratedValue
     private UUID id;
+    @ManyToOne(fetch = FetchType.LAZY)
     private Account from;
+    @ManyToOne(fetch = FetchType.LAZY)
     private Account to;
     private long amount;
     private String currency;
     private Instant createdAt;
+    @OneToMany(mappedBy = "transfer", cascade = CascadeType.PERSIST)
     private List<Entry> entries;
+
+    protected Transfer() {
+    }
 
     private Transfer(Account from, Account to, long amount) {
         this.from = from;
