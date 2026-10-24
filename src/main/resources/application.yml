@@ -12,6 +12,8 @@ spring:
     properties:
       # Update accounts in id order so two transfers between the same pair cannot deadlock each other.
       hibernate.order_updates: true
+  kafka:
+    bootstrap-servers: localhost:9094
   mvc:
     problemdetails:
       enabled: true

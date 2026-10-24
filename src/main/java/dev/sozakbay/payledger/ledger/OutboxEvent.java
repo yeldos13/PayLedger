@@ -21,6 +21,7 @@ public class OutboxEvent {
     @JdbcTypeCode(SqlTypes.JSON)
     private String payload;
     private Instant createdAt;
+    private Instant publishedAt;
 
     protected OutboxEvent() {
     }
@@ -32,9 +33,14 @@ public class OutboxEvent {
         this.createdAt = Instant.now();
     }
 
+    void markPublished() {
+        publishedAt = Instant.now();
+    }
+
     public UUID getId() { return id; }
     public UUID getAggregateId() { return aggregateId; }
     public String getType() { return type; }
     public String getPayload() { return payload; }
     public Instant getCreatedAt() { return createdAt; }
+    public Instant getPublishedAt() { return publishedAt; }
 }
