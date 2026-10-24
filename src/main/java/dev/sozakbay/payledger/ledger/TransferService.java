@@ -1,5 +1,6 @@
 package dev.sozakbay.payledger.ledger;
 
+import dev.sozakbay.payledger.events.TransferCompleted;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -7,6 +8,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
+import tools.jackson.databind.json.JsonMapper;
 
 @Service
 public class TransferService {
@@ -16,12 +18,17 @@ public class TransferService {
 
     private final AccountRepository accounts;
     private final TransferRepository transfers;
+    private final OutboxRepository outbox;
     private final TransactionTemplate tx;
+    private final JsonMapper json;
 
-    public TransferService(AccountRepository accounts, TransferRepository transfers, TransactionTemplate tx) {
+    public TransferService(AccountRepository accounts, TransferRepository transfers, OutboxRepository outbox,
+                           TransactionTemplate tx, JsonMapper json) {
         this.accounts = accounts;
         this.transfers = transfers;
+        this.outbox = outbox;
         this.tx = tx;
+        this.json = json;
     }
 
     /** Only currencies with a system funding account can be deposited, so only those can be opened. */
@@ -66,7 +73,13 @@ public class TransferService {
             log.atInfo().addKeyValue("transferId", existing.get().getId()).log("Idempotent replay");
             return existing.get();
         }
-        return transfers.save(Transfer.execute(idempotencyKey, account(fromId), account(toId), amount));
+        var transfer = transfers.save(Transfer.execute(idempotencyKey, account(fromId), account(toId), amount));
+        // Same transaction as the transfer: the event exists if and only if the money moved.
+        var event = new TransferCompleted(transfer.getId(), fromId, toId, amount, transfer.getCurrency(),
+                transfer.getCreatedAt());
+        outbox.save(new OutboxEvent(transfer.getId(), TransferCompleted.class.getSimpleName(),
+                json.writeValueAsString(event)));
+        return transfer;
     }
 
     private Account account(UUID id) {

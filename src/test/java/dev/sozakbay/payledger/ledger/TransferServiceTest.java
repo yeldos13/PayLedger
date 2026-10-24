@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import dev.sozakbay.payledger.TestcontainersConfig;
+import dev.sozakbay.payledger.events.TransferCompleted;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.UUID;
@@ -19,6 +20,7 @@ import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.OptimisticLockingFailureException;
+import tools.jackson.databind.json.JsonMapper;
 
 @SpringBootTest
 @Import(TestcontainersConfig.class)
@@ -27,6 +29,8 @@ class TransferServiceTest {
 
     @Autowired TransferService service;
     @Autowired AccountRepository accounts;
+    @Autowired OutboxRepository outbox;
+    @Autowired JsonMapper json;
 
     @Test
     void logsCompletedTransferAsJson(CapturedOutput output) {
@@ -127,6 +131,31 @@ class TransferServiceTest {
         }
         assertThat(ids).hasSize(1);
         assertThat(balance(alice)).isEqualTo(90);
+    }
+
+    @Test
+    void writesOneOutboxEventPerTransfer() {
+        var alice = funded(100);
+        var bob = service.openAccount("KZT").getId();
+        var key = key();
+
+        var transfer = service.transfer(key, alice, bob, 40);
+        service.transfer(key, alice, bob, 40);
+
+        var events = outbox.findByAggregateId(transfer.getId());
+        assertThat(events).singleElement().extracting(OutboxEvent::getType).isEqualTo("TransferCompleted");
+        var event = json.readValue(events.getFirst().getPayload(), TransferCompleted.class);
+        assertThat(event).isEqualTo(new TransferCompleted(transfer.getId(), alice, bob, 40, "KZT", event.occurredAt()));
+    }
+
+    @Test
+    void rejectedTransferWritesNoEvent() {
+        var alice = funded(100);
+        var bob = service.openAccount("KZT").getId();
+        var before = outbox.count();
+
+        assertThatThrownBy(() -> service.transfer(key(), alice, bob, 101)).isInstanceOf(LedgerException.class);
+        assertThat(outbox.count()).isEqualTo(before);
     }
 
     private static String key() {
