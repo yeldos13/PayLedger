@@ -20,6 +20,7 @@ public class Transfer {
     @Id
     @GeneratedValue
     private UUID id;
+    private String idempotencyKey;
     @ManyToOne(fetch = FetchType.LAZY)
     private Account from;
     @ManyToOne(fetch = FetchType.LAZY)
@@ -33,7 +34,8 @@ public class Transfer {
     protected Transfer() {
     }
 
-    private Transfer(Account from, Account to, long amount) {
+    private Transfer(String idempotencyKey, Account from, Account to, long amount) {
+        this.idempotencyKey = idempotencyKey;
         this.from = from;
         this.to = to;
         this.amount = amount;
@@ -43,7 +45,7 @@ public class Transfer {
     }
 
     /** Moves the money between the accounts and returns the transfer with its entries. */
-    public static Transfer execute(Account from, Account to, long amount) {
+    public static Transfer execute(String idempotencyKey, Account from, Account to, long amount) {
         if (amount <= 0) {
             throw new LedgerException("Amount must be positive");
         }
@@ -55,7 +57,12 @@ public class Transfer {
         }
         from.debit(amount);
         to.credit(amount);
-        return new Transfer(from, to, amount);
+        return new Transfer(idempotencyKey, from, to, amount);
+    }
+
+    /** True if a retried request with the same Idempotency-Key asks for exactly this transfer. */
+    public boolean sameRequest(UUID fromId, UUID toId, long amount) {
+        return from.getId().equals(fromId) && to.getId().equals(toId) && this.amount == amount;
     }
 
     public UUID getId() { return id; }

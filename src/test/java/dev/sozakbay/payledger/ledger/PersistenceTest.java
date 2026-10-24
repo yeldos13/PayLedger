@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.sozakbay.payledger.TestcontainersConfig;
 import jakarta.persistence.EntityManager;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -24,7 +25,7 @@ class PersistenceTest {
         var system = accounts.findByTypeAndCurrency(Account.Type.SYSTEM, "KZT").orElseThrow();
         var alice = accounts.save(new Account("KZT"));
 
-        var id = transfers.save(Transfer.execute(system, alice, 5_000)).getId();
+        var id = transfers.save(Transfer.execute(UUID.randomUUID().toString(), system, alice, 5_000)).getId();
         em.flush();
         em.clear();
 

@@ -1,5 +1,6 @@
 package dev.sozakbay.payledger.ledger;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -8,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.jayway.jsonpath.JsonPath;
 import dev.sozakbay.payledger.TestcontainersConfig;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -46,10 +48,33 @@ class LedgerApiTest {
         var alice = openAccount();
         var bob = openAccount();
 
-        mvc.perform(post("/transfers").contentType(MediaType.APPLICATION_JSON).content(transferBody(alice, bob, 1)))
+        mvc.perform(post("/transfers").header("Idempotency-Key", UUID.randomUUID().toString())
+                        .contentType(MediaType.APPLICATION_JSON).content(transferBody(alice, bob, 1)))
                 .andExpect(status().isUnprocessableContent())
                 .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.detail").value("Insufficient funds"));
+    }
+
+    @Test
+    void retryWithSameKeyReturnsSameTransfer() throws Exception {
+        var alice = openAccount();
+        var key = UUID.randomUUID().toString();
+
+        var first = postForId("/accounts/" + alice + "/deposits", "{\"amount\":500}", 201, key);
+        var second = postForId("/accounts/" + alice + "/deposits", "{\"amount\":500}", 201, key);
+
+        assertThat(second).isEqualTo(first);
+        mvc.perform(get("/accounts/" + alice)).andExpect(jsonPath("$.balance").value(500));
+    }
+
+    @Test
+    void missingIdempotencyKeyIsBadRequest() throws Exception {
+        var alice = openAccount();
+
+        mvc.perform(post("/accounts/" + alice + "/deposits").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"amount\":500}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON));
     }
 
     @Test
@@ -76,7 +101,12 @@ class LedgerApiTest {
 
     /** Posts JSON, checks the status and returns the "id" of the response. */
     private String postForId(String url, String body, int expectedStatus) throws Exception {
-        var response = mvc.perform(post(url).contentType(MediaType.APPLICATION_JSON).content(body))
+        return postForId(url, body, expectedStatus, UUID.randomUUID().toString());
+    }
+
+    private String postForId(String url, String body, int expectedStatus, String key) throws Exception {
+        var response = mvc.perform(post(url).header("Idempotency-Key", key)
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().is(expectedStatus))
                 .andReturn().getResponse().getContentAsString();
         return JsonPath.read(response, "$.id");
