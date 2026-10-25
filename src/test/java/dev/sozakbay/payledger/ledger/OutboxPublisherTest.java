@@ -6,6 +6,7 @@ import dev.sozakbay.payledger.TestcontainersConfig;
 import dev.sozakbay.payledger.events.TransferCompleted;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Properties;
 import java.util.UUID;
@@ -51,5 +52,21 @@ class OutboxPublisherTest {
             assertThat(found.value()).contains(transfer.getId().toString()).containsPattern("\"amount\": ?250");
         }
         assertThat(outbox.findById(eventId).orElseThrow().getPublishedAt()).isNotNull();
+    }
+
+    @Test
+    void deletesOnlyPublishedEvents() {
+        var to = service.openAccount("KZT").getId();
+        var transfer = service.deposit(UUID.randomUUID().toString(), to, 100);
+        var eventId = outbox.findByAggregateId(transfer.getId()).getFirst().getId();
+        for (long deadline = System.nanoTime() + Duration.ofSeconds(30).toNanos();
+             outbox.findById(eventId).orElseThrow().getPublishedAt() == null && System.nanoTime() < deadline; ) {
+            Thread.onSpinWait();
+        }
+
+        outbox.deletePublishedBefore(Instant.now().plusSeconds(1));
+
+        assertThat(outbox.findById(eventId)).isEmpty();
+        assertThat(outbox.findAll()).allMatch(e -> e.getPublishedAt() == null);
     }
 }
