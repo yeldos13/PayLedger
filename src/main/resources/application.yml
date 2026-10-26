@@ -14,6 +14,9 @@ spring:
       hibernate.order_updates: true
   kafka:
     bootstrap-servers: localhost:9094
+    consumer:
+      # A new consumer group starts from the oldest event, so nothing published before its first start is missed.
+      auto-offset-reset: earliest
     producer:
       properties:
         # Fail fast when the broker is down instead of blocking the publisher (and its row locks) for 60s.
