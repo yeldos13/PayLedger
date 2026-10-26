@@ -18,10 +18,12 @@ class TransferListener {
 
     private final JsonMapper json;
     private final JdbcTemplate jdbc;
+    private final FraudChecker checker;
 
-    TransferListener(JsonMapper json, JdbcTemplate jdbc) {
+    TransferListener(JsonMapper json, JdbcTemplate jdbc, FraudChecker checker) {
         this.json = json;
         this.jdbc = jdbc;
+        this.checker = checker;
     }
 
     @KafkaListener(topics = TransferCompleted.TOPIC, groupId = "fraud")
@@ -39,5 +41,6 @@ class TransferListener {
         log.atInfo().addKeyValue("eventId", eventId).addKeyValue("transferId", event.transferId())
                 .addKeyValue("amount", event.amount()).addKeyValue("currency", event.currency())
                 .log("Fraud check received transfer");
+        checker.check(event);
     }
 }
