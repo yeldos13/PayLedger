@@ -41,10 +41,11 @@ class FraudChecker {
         if (event.amount() >= LARGE_AMOUNT_LIMITS.getOrDefault(event.currency(), Long.MAX_VALUE)) {
             alerts.add(LARGE_AMOUNT);
         }
+        // No upper bound: events from different partitions arrive out of order, later payments still count.
         var recent = jdbc.queryForObject("""
                 select count(*) from fraud_transfers
-                where to_account_id = ? and occurred_at > ? and occurred_at <= ?""",
-                Long.class, event.toAccountId(), Timestamp.from(event.occurredAt().minus(VELOCITY_WINDOW)), at);
+                where to_account_id = ? and occurred_at > ?""",
+                Long.class, event.toAccountId(), Timestamp.from(event.occurredAt().minus(VELOCITY_WINDOW)));
         if (recent >= VELOCITY_LIMIT) {
             alerts.add(VELOCITY);
         }
