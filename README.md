@@ -3,7 +3,8 @@
 [![CI](https://github.com/yeldos13/PayLedger/actions/workflows/ci.yml/badge.svg)](https://github.com/yeldos13/PayLedger/actions/workflows/ci.yml)
 
 A small payments service with a double-entry ledger. You open accounts, top them up and move money
-between them. Every completed transfer is announced to Kafka as a `TransferCompleted` event.
+between them. Every completed transfer is announced to Kafka as a `TransferCompleted` event, and a
+separate fraud module reads those events and flags suspicious payments.
 
 Built with Java 21, Spring Boot 4, PostgreSQL, Kafka, Flyway and Testcontainers.
 
@@ -15,12 +16,17 @@ flowchart LR
     api --> db[(PostgreSQL<br/>accounts, transfers,<br/>entries, outbox)]
     publisher[Outbox publisher] -->|polls every 500 ms| db
     publisher -->|TransferCompleted| kafka[[Kafka<br/>ledger.transfers]]
+    kafka --> fraud[Fraud module]
+    fraud --> fdb[(fraud tables:<br/>processed events,<br/>alerts)]
+    fraud -.->|after retries| dlt[[ledger.transfers.DLT]]
 ```
 
 1. A transfer request comes in with an `Idempotency-Key` header.
 2. In **one database transaction** the service checks the balance, moves the money, writes two ledger
    entries and adds an event row to the `outbox` table.
 3. A background publisher reads new outbox rows and sends them to Kafka, then marks them as published.
+4. The fraud module consumes the event, skips it if it has seen it before, runs its rules and stores an
+   alert if one fires.
 
 ## Key ideas, in plain words
 
@@ -38,6 +44,20 @@ flowchart LR
 - **Clear errors.** Failures follow RFC 9457 Problem Details (`application/problem+json`):
   422 for broken business rules, 404 for unknown accounts, 409 for a conflict that survived retries.
 - **Structured logs** in JSON (Elastic Common Schema), ready for Loki or ELK.
+
+## Fraud module
+
+Lives in the same application but behaves like a separate service: it only knows the ledger through
+Kafka events and has its own tables. A [Spring Modulith](https://spring.io/projects/spring-modulith) test
+fails the build if it ever imports ledger code.
+
+- **Each event handled once.** Kafka may deliver an event again, so the module records every `eventId` in
+  the same transaction as its work and skips repeats.
+- **Rules.** `LARGE_AMOUNT`: 500 000 KZT or 1 000 USD/EUR and above. `VELOCITY`: 5 or more incoming payments
+  to one account within a minute, a typical money-mule pattern. A rule only raises an alert for review;
+  it never blocks the payment.
+- **Bad messages don't block the queue.** A failing event is retried twice, then moved to
+  `ledger.transfers.DLT`. Malformed JSON goes there at once, since retrying cannot fix it.
 
 ## Run it
 
@@ -102,7 +122,8 @@ docker compose exec kafka /opt/kafka/bin/kafka-console-consumer.sh \
 
 Needs Docker: integration tests run against real PostgreSQL and Kafka through Testcontainers.
 They cover parallel transfers that try to overdraw an account, concurrent retries with the same key,
-the full HTTP → database → Kafka flow, and the ledger invariant that all entries sum to zero.
+the full HTTP → database → Kafka flow, the ledger invariant that all entries sum to zero, fraud alerts
+raised from real Kafka events, the dead letter topic, and module boundaries.
 CI runs the same command on every push.
 
 ## Project layout
@@ -110,6 +131,7 @@ CI runs the same command on every push.
 ```
 src/main/java/dev/sozakbay/payledger/
 ├── ledger/   accounts, transfers, entries, REST API, outbox publisher
-└── events/   TransferCompleted, the JSON contract for Kafka consumers
+├── fraud/    Kafka listener, deduplication, rules, dead letter topic
+└── events/   TransferCompleted, the JSON contract between the two
 src/main/resources/db/migration/   Flyway SQL migrations
 ```
