@@ -59,6 +59,8 @@ fails the build if it ever imports ledger code.
 - **Bad messages don't block the queue.** A failing event is retried twice, then moved to
   `ledger.transfers.DLT`. Malformed JSON goes there at once, since retrying cannot fix it.
 
+> **Demo only:** there is no authentication, so anyone who can reach the API can top up any account.
+
 ## Run it
 
 You need Docker.
@@ -111,7 +113,7 @@ docker compose exec kafka /opt/kafka/bin/kafka-console-consumer.sh \
 | GET | `/accounts/{id}` | Account with its balance |
 | GET | `/accounts/{id}/entries` | Statement, newest first |
 | POST | `/accounts/{id}/deposits` | Top up from the system account (needs `Idempotency-Key`) |
-| POST | `/transfers` | Move money between two accounts (needs `Idempotency-Key`) |
+| POST | `/transfers` | Move money between two customer accounts (needs `Idempotency-Key`) |
 | GET | `/transfers/{id}` | One transfer |
 
 ## Tests

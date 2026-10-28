@@ -7,6 +7,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -42,17 +44,21 @@ public class TransferService {
     public Transfer deposit(String idempotencyKey, UUID toId, long amount) {
         var currency = account(toId).getCurrency();
         var system = accounts.findByTypeAndCurrency(Account.Type.SYSTEM, currency).orElseThrow();
-        return transfer(idempotencyKey, system.getId(), toId, amount);
+        return move(idempotencyKey, system.getId(), toId, amount);
     }
 
+    /** Customer to customer only: system accounts move money through deposits, never through this API. */
     public Transfer transfer(String idempotencyKey, UUID fromId, UUID toId, long amount) {
+        if (account(fromId).getType() != Account.Type.CUSTOMER || account(toId).getType() != Account.Type.CUSTOMER) {
+            throw new LedgerException("Transfers are allowed only between customer accounts");
+        }
+        return move(idempotencyKey, fromId, toId, amount);
+    }
+
+    private Transfer move(String idempotencyKey, UUID fromId, UUID toId, long amount) {
         for (int attempt = 1; ; attempt++) {
             try {
-                var transfer = tx.execute(status -> transferOnce(idempotencyKey, fromId, toId, amount));
-                log.atInfo().addKeyValue("transferId", transfer.getId()).addKeyValue("fromAccountId", fromId)
-                        .addKeyValue("toAccountId", toId).addKeyValue("amount", amount)
-                        .addKeyValue("currency", transfer.getCurrency()).log("Transfer completed");
-                return transfer;
+                return tx.execute(status -> transferOnce(idempotencyKey, fromId, toId, amount));
             } catch (OptimisticLockingFailureException | DataIntegrityViolationException e) {
                 // A parallel transfer changed one of the accounts first, or committed the same Idempotency-Key.
                 // The retry re-reads fresh balances, or finds that transfer and replays it.
@@ -79,6 +85,15 @@ public class TransferService {
                 transfer.getCreatedAt());
         outbox.save(new OutboxEvent(transfer.getId(), TransferCompleted.class.getSimpleName(),
                 json.writeValueAsString(event)));
+        // Logged after commit and only for new transfers, so a replay or a rollback never claims money moved.
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                log.atInfo().addKeyValue("transferId", transfer.getId()).addKeyValue("fromAccountId", fromId)
+                        .addKeyValue("toAccountId", toId).addKeyValue("amount", amount)
+                        .addKeyValue("currency", transfer.getCurrency()).log("Transfer completed");
+            }
+        });
         return transfer;
     }
 

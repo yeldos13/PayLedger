@@ -9,6 +9,7 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.UUID;
+import java.util.function.LongSupplier;
 
 @Entity
 @Table(name = "accounts")
@@ -50,11 +51,20 @@ public class Account {
         if (type == Type.CUSTOMER && balance < amount) {
             throw new LedgerException("Insufficient funds");
         }
-        balance -= amount;
+        balance = exact(() -> Math.subtractExact(balance, amount));
     }
 
     void credit(long amount) {
-        balance += amount;
+        balance = exact(() -> Math.addExact(balance, amount));
+    }
+
+    /** A wrapped-around long would silently break the ledger, so overflow is a rejected request instead. */
+    private static long exact(LongSupplier operation) {
+        try {
+            return operation.getAsLong();
+        } catch (ArithmeticException e) {
+            throw new LedgerException("Amount too large");
+        }
     }
 
     public UUID getId() { return id; }

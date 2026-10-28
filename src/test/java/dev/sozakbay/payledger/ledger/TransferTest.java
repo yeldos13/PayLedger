@@ -76,6 +76,21 @@ class TransferTest {
     }
 
     @Test
+    void rejectsOverflowInsteadOfWrappingAround() {
+        var system = new Account("KZT", Account.Type.SYSTEM);
+        Transfer.execute("key", system, new Account("KZT"), 10);
+
+        assertThatThrownBy(() -> Transfer.execute("key", system, new Account("KZT"), Long.MAX_VALUE))
+                .isInstanceOf(LedgerException.class).hasMessage("Amount too large");
+        assertThat(system.getBalance()).isEqualTo(-10);
+
+        var rich = funded(Long.MAX_VALUE - 5);
+        assertThatThrownBy(() -> Transfer.execute("key", new Account("KZT", Account.Type.SYSTEM), rich, 10))
+                .hasMessage("Amount too large");
+        assertThat(rich.getBalance()).isEqualTo(Long.MAX_VALUE - 5);
+    }
+
+    @Test
     void sameRequestComparesAccountsAndAmount() {
         var alice = withId(funded(100));
         var bob = withId(new Account("KZT"));

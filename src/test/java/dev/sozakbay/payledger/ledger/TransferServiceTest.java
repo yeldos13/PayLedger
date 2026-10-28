@@ -85,6 +85,31 @@ class TransferServiceTest {
     }
 
     @Test
+    void transfersFromOrToSystemAccountAreRejected() {
+        var alice = funded(100);
+        var system = accounts.findByTypeAndCurrency(Account.Type.SYSTEM, "KZT").orElseThrow().getId();
+
+        assertThatThrownBy(() -> service.transfer(key(), system, alice, 1_000_000))
+                .isInstanceOf(LedgerException.class).hasMessage("Transfers are allowed only between customer accounts");
+        assertThatThrownBy(() -> service.transfer(key(), alice, system, 50)).isInstanceOf(LedgerException.class);
+        assertThat(balance(alice)).isEqualTo(100);
+    }
+
+    @Test
+    void replayIsNotLoggedAsCompletedTransfer(CapturedOutput output) {
+        var alice = funded(100);
+        var bob = service.openAccount("KZT").getId();
+        var key = key();
+
+        var id = service.transfer(key, alice, bob, 40).getId();
+        service.transfer(key, alice, bob, 40);
+
+        assertThat(output.getOut().lines()
+                .filter(line -> line.contains("\"Transfer completed\"") && line.contains(id.toString()))).hasSize(1);
+        assertThat(output).containsPattern("\"message\":\"Idempotent replay\".*\"transferId\":\"" + id);
+    }
+
+    @Test
     void sameKeyReplaysTransferOnce() {
         var alice = funded(100);
         var bob = service.openAccount("KZT").getId();

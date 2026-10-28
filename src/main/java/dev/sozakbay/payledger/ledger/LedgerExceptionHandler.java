@@ -2,6 +2,7 @@ package dev.sozakbay.payledger.ledger;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -25,8 +26,9 @@ class LedgerExceptionHandler {
         return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, e.getMessage());
     }
 
-    @ExceptionHandler
-    ProblemDetail concurrentUpdate(OptimisticLockingFailureException e) {
+    // Both come out of TransferService only after its retries ran out: a conflict, not a server bug.
+    @ExceptionHandler({OptimisticLockingFailureException.class, DataIntegrityViolationException.class})
+    ProblemDetail concurrentUpdate(RuntimeException e) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, "Concurrent update, retry the request");
     }
 }
