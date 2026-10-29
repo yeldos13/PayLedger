@@ -29,7 +29,17 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,prometheus
+  endpoint:
+    health:
+      # liveness/readiness groups for Kubernetes probes (auto-enabled only inside a cluster)
+      probes:
+        enabled: true
+  metrics:
+    distribution:
+      # Histogram buckets so Prometheus can compute p95 latency
+      percentiles-histogram:
+        http.server.requests: true
 
 logging:
   structured:
