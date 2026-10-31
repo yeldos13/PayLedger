@@ -17,6 +17,8 @@ public interface OutboxRepository extends JpaRepository<OutboxEvent, UUID> {
             nativeQuery = true)
     List<OutboxEvent> lockUnpublishedBatch();
 
+    long countByPublishedAtIsNull();
+
     @Transactional
     @Modifying
     @Query("delete from OutboxEvent e where e.publishedAt < :before")
