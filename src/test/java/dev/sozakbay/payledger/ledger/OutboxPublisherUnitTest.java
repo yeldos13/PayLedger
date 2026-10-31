@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import io.opentelemetry.api.OpenTelemetry;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -28,7 +29,7 @@ class OutboxPublisherUnitTest {
                 .thenReturn(CompletableFuture.completedFuture(null))
                 .thenReturn(CompletableFuture.failedFuture(new IllegalStateException("broker down")));
 
-        new OutboxPublisher(outbox, kafka).publish();
+        new OutboxPublisher(outbox, kafka, OpenTelemetry.noop()).publish();
 
         assertThat(sent.getPublishedAt()).isNotNull();
         assertThat(failed.getPublishedAt()).isNull();

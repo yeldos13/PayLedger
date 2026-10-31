@@ -14,6 +14,9 @@ spring:
       hibernate.order_updates: true
   kafka:
     bootstrap-servers: localhost:9094
+    listener:
+      # Consumer spans continue the trace from the traceparent header set by OutboxPublisher.
+      observation-enabled: true
     consumer:
       # A new consumer group starts from the oldest event, so nothing published before its first start is missed.
       auto-offset-reset: earliest
@@ -26,6 +29,13 @@ spring:
       enabled: true
 
 management:
+  tracing:
+    sampling:
+      probability: 1.0
+  observations:
+    enable:
+      # The outbox poll runs twice a second; tracing it would bury the request traces.
+      tasks.scheduled: false
   endpoints:
     web:
       exposure:
